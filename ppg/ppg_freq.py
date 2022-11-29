@@ -36,7 +36,7 @@ rc("font", **{"size": 11})
 from utils import SubjectPPGRecord
 
 MAT_FILE = "Subject14"
-sub = SubjectPPGRecord(MAT_FILE, db_path=".", mat=True)
+sub = SubjectPPGRecord(MAT_FILE, db_path="TCC2/ppg/", mat=True)
 rec = sub.record
 fs = sub.fs
 red_ppg = rec.red_a
