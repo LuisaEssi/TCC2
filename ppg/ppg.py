@@ -2,6 +2,7 @@
 # from turtle import distance
 from cv2 import threshold
 import numpy as np
+import numpy
 from numpy.fft import fft, fftshift
 import matplotlib.pyplot as plt
 from matplotlib import rc
@@ -11,36 +12,55 @@ from threshold_pev import adaptative_th, fix_pev, loc_pev
 
 ZERO_PHASE_FILTERS = True
 PLOTS = True
-# In[]:
-# Plot Settings
-rc("font", **{"size": 18})
-plt.close("all")
-plt.ion()
-
 
 # In[]:
 # Load Subject Data using helper function
 from utils import SubjectPPGRecord
 
-MAT_FILE = "Subject14"
-sub = SubjectPPGRecord(MAT_FILE, db_path=".", mat=True)
+# MAT_FILE = "Subject6"
+MAT_FILE = "Subject8"
+# MAT_FILE = "Subject14"
+sub = SubjectPPGRecord(MAT_FILE, db_path="ppg/", mat=True)
 rec = sub.record
 fs = sub.fs
 red_ppg = rec.red_a
 ir_ppg = rec.ir_a
 spo2 = rec.spo2
+inc_sec = 2560
 
-red = red_ppg[200000:]
-ir = ir_ppg[200000:]
+
+#SUBJECT14
+
+# inicio = 355072  # Spo2 = 89 - ok
+# inicio = 470*256 # Spo2 = 95/96 -ok
+# inicio = 1140*256 # Spo2 = 94 - cagado
+# inicio = 1660*256 # Spo2 = 87
+# inicio = 3024*256 # Spo2 = 91 - ok
+
+#SUBJECT6
+
+# inicio = 3171*256 # Spo2 = 94 - ok ORDEM = 150 E PASSO = 0,04s
+
+#SUBJECT8
+
+# inicio = 2305*256 # Spo2 = 96 - OK
+inicio = 2680*256 # Spo2 = 98 - OK
+
 
 # Time array
-t = np.linspace(0, ((len(red) / fs)), len(red))
-print(f"PPG Signal contains {len(red)} samples and {len(red)/fs} sec. duration.")
+
+print(f"PPG Signal contains {len(red_ppg)} samples and {len(red_ppg)/fs} sec. duration.")
 
 
 # In[]:
-### BUTTER
 
+red = red_ppg[inicio:inicio+inc_sec]
+ir = ir_ppg[inicio:inicio+inc_sec]
+
+t = np.linspace(0, ((len(red) / fs)), len(red))
+
+
+### BUTTER
 # LOWPASS FILTER
 cutoff_lp = 8  # desired cutoff frequency of the filter, Hz
 LP_ORDER = 8
@@ -50,7 +70,7 @@ ir_lp = butter_filter(ir, cutoff_lp, fs, order=LP_ORDER)
 # HIGHPASS SIGNAL
 cutoff_dc = 0.4
 HP_ORDER = 8
-red_hp = butter_filter(red_lp, cutoff_dc, fs, order=HP_ORDER, btype="high")
+red_hp = butter_filter(red_lp, cutoff_dc, fs, order=HP_ORDER, btype="high") 
 ir_hp = butter_filter(ir_lp, cutoff_dc, fs, order=HP_ORDER, btype="high")
 
 # BANDPASS SIGNAL
@@ -58,6 +78,7 @@ BP_ORDER = 8
 red_bp = butter_bandpass_filter(red, cutoff_dc, cutoff_lp, fs, order=BP_ORDER)
 ir_bp = butter_bandpass_filter(ir, cutoff_dc, cutoff_lp, fs, order=BP_ORDER)
 
+# sinal red_bp e ir_bp filtrado pelo butter 
 
 ###CHEBY2
 
@@ -73,47 +94,17 @@ HP_ORDER_CH = 6
 red_dc_cheby2 = cheby2_filter(red_lp_cheby2, cutoff_dc, fs, order=HP_ORDER_CH, rs = rs, btype="high")
 ir_dc_cheby2 = cheby2_filter(ir_lp_cheby2, cutoff_dc, fs, order=HP_ORDER_CH, rs = rs, btype="high")
 
-# BANDPASS SIGNAL
-
-# red_bp_cheby2 = cheby2_bandpass_filter(red, cutoff_dc, cutoff_lp, fs, rs = 26, order=HP_ORDER)
-# ir_bp_cheby2 = cheby2_bandpass_filter(ir, cutoff_dc, cutoff_lp, fs, rs = 26, order=HP_ORDER)
+# sinal red_dc_cheby2 e ir_dc_cheby2 finaç filtrado pelo cheby2
 
 
-#%%
-# - np.mean(ir[start * fs : end * fs]
 
-# if PLOTS:
-#     fig, ax = plt.subplots()
-#     start = 0
-#     end = 5000
-#     plt.plot(
-#         t[start * fs : end * fs], 
-#         ir_dc_cheby2[start * fs : end * fs], 
-#         linewidth=2, 
-#         label="Sinal IR filtrado",
-#     )
-#     plt.show()
-#     plt.plot(
-#         t[start * fs : end * fs],
-#         ir[start * fs : end * fs],
-#         linewidth=1,
-#         label="Sinal IR original",
-#     )
-    # # plt.ylim((-0.05, +0.05))
-    # plt.xlabel("Tempo [sec]")
-    # plt.ylabel("Amplitude [mV]")
-    # plt.minorticks_on()
-    # plt.grid(True, which="major", alpha=0.8)
-    # plt.grid(True, which="minor", alpha=0.3)
-    # plt.legend()
-    # # plt.show()
+#funcao calcula os valores de limiares para que armazer os possiceis picos e os vales do sinal
 
-#%%
 def find_peak_valley_2(sample, time, threshold, order,gain):
 
     i = 1
     num_upsteps = 0
-    possible_peak = False
+    possible_peak = False 
     possible_valley = False
     value_possible_peak = 0
     time_possible_peak = 0
@@ -123,15 +114,16 @@ def find_peak_valley_2(sample, time, threshold, order,gain):
     value_valley = []
     time_valley = []
     time_peak = []
-    media_peak = 0
-    media_valley = 0
+    media_peak = 0 
+    media_valley = 0 
     peak_vector =[0]*order
     valley_vector = [0]*order
     vec_media_peak = []
     vec_media_peak_time = []
     vec_media_valley = []
     vec_media_valley_time = []
-    soma = 0
+    limite = 0.3
+    
 
     while (i < len(sample)):
         if i>= 2:
@@ -152,57 +144,48 @@ def find_peak_valley_2(sample, time, threshold, order,gain):
                             value_possible_valley = sample[i]
                             time_possible_valley = time[i]
                                                         
-                    if (possible_peak == True):
-                        if (sample[i-1]<value_possible_peak):
-                            # if(soma < 1): 
-                            # # np.roll(peak_vector,1)
-                            # # peak_vector[0]=sample[i-1]
-                            # # media_peak =( (np.sum(peak_vector))/order)*gain
-                            # # vec_media_peak.append(media_peak)
-                            # # vec_media_peak_time.append(time[i-1])
-                            # # if (media_peak-value_possible_peak<value_possible_peak):
-                            #     time_peak.append(time[i-1])
-                            #     value_peak.append(sample[i-1])
-                            #     soma = soma+1
-                            #     print("if inicial da soma peak",soma)
-
-                        # else:
-                    
+                    if (possible_peak == True):                        
+                        if (sample[i-1]>value_possible_peak):
+                            peak_vector[0] = sample[i-1]
+                            media_peak = ((np.sum(peak_vector))/order)
+                            peak_vector=np.roll(peak_vector,1)
+                            vec_media_peak.append(media_peak*limiar)
+                            vec_media_peak_time.append(time[i-1])
+                            if (abs(media_peak*limite)<=abs(sample[i-1])):
+                                time_peak.append(time[i-1])
+                                value_peak.append(sample[i-1])
+                                
+                        else:
                             peak_vector[0]=value_possible_peak
                             media_peak = ((np.sum(peak_vector))/order)
                             peak_vector=np.roll(peak_vector,1)
-                            vec_media_peak.append(media_peak*0.5)
+                            vec_media_peak.append(media_peak*limite)
                             vec_media_peak_time.append(time_possible_peak)
-                            if (abs(media_peak*0.5)<=abs(value_possible_peak)):
-                                if (soma < 1):
+                            if (abs(media_peak*limite)<=abs(value_possible_peak)):
                                     time_peak.append(time_possible_peak)
                                     value_peak.append(value_possible_peak)
-                                    soma = soma+1
-                                elif (possible_valley == True):
-                            
-                                    valley_vector[0]=value_possible_valley
-                                    media_valley = ((np.sum(valley_vector))/order)
-                                    valley_vector= np.roll(valley_vector,1) 
-                                    vec_media_valley.append(media_valley*0.5)
-                                    vec_media_valley_time.append(time_possible_valley)
-                                    if ((media_valley*0.5)>=(value_possible_valley)):
-                                        if (soma == 1):
-                                            time_valley.append(time_possible_valley)
-                                            value_valley.append(value_possible_valley)
-                                            possible_valley = False 
-                                            soma = 0                            
+                                    
+                                    
+                        if (possible_valley == True): 
+                            valley_vector[0]=value_possible_valley
+                            media_valley = ((np.sum(valley_vector))/order)
+                            valley_vector= np.roll(valley_vector,1) 
+                            vec_media_valley.append(media_valley*limite)
+                            vec_media_valley_time.append(time_possible_valley)
+                            if ((media_valley*limite)>=(value_possible_valley)):
+                                time_valley.append(time_possible_valley)
+                                value_valley.append(value_possible_valley)
+                                possible_valley = False 
+                                                                                                          
                         possible_peak = False
                 num_upsteps = 0
                
-                    
         i = i + 1
                 
     threshold = 0.6 * num_upsteps
     return value_peak, value_valley, time_peak, time_valley,vec_media_peak,\
            vec_media_valley,vec_media_peak_time,vec_media_valley_time
 
-# moving_average_peak =  
-# moving_average_valley  
 vec_media_peak_ir = []
 vec_media_valley_ir  = []
 vec_media_peak_red = []
@@ -215,228 +198,53 @@ vec_media_valley_ir_time  = []
 avg_order = 5
 threshold_peak_valley = 25
 
+
 peak_ir,valley_ir, time_p_ir,time_v_ir,vec_media_peak_ir,\
 vec_media_valley_ir,vec_media_peak_ir_time,\
 vec_media_valley_ir_time = find_peak_valley_2(ir_dc_cheby2, t, threshold_peak_valley,avg_order,2)
+
 
 peak_red,valley_red, time_p_red,time_v_red,vec_media_peak_red,\
 vec_media_valley_red,vec_media_peak_red_time,\
 vec_media_valley_red_time = find_peak_valley_2(red_dc_cheby2, t, threshold_peak_valley, avg_order,2)
 
-if PLOTS:
+#PLOT IR com sinal vindo do filtro Cheby2, limiar e pontos de Picos e vales encontrados 
+plt.plot(t, ir_dc_cheby2, "k", label="PPG Cheby2")
+plt.plot(time_p_ir, peak_ir, "r.", label="Threshold Peaks IR")
+plt.plot(time_v_ir, valley_ir, "g.", label="Threshold Valley IR")
+plt.plot(vec_media_peak_ir_time, vec_media_peak_ir,"y", label="Media peak IR")
+plt.plot(vec_media_valley_ir_time, vec_media_valley_ir,"m", label="Media valley IR")
+plt.legend()
+plt.show()
 
-    plt.plot(t, ir_dc_cheby2, "k", label="PPG")
-    plt.plot(time_p_ir, peak_ir, "r.", label="Threshold Peaks IR")
-    plt.plot(time_v_ir, valley_ir, "g.", label="Threshold Valley IR")
-    plt.plot(vec_media_peak_ir_time, vec_media_peak_ir,"y", label="Media peak IR")
-    plt.plot(vec_media_valley_ir_time, vec_media_valley_ir,"m", label="Media valley IR")
-    plt.legend()
-    plt.show()
-    plt.figure()
+#PLOT RED com sinal vindo do filtro Cheby2, limiar e pontos de Picos e vales encontrados
     
-if PLOTS:
-    plt.plot(t, red_dc_cheby2, "k", label="PPG")
-    plt.plot(time_p_red, peak_red, "r.", label="Threshold Peaks RED")
-    plt.plot(time_v_red, valley_red, "g.", label="Threshold Valley RED")
-    plt.legend()
-    plt.show()
-
-# r_ir = (np.array(peak_ir) - np.array(valley_ir))/np.array(peak_ir)
-r_red = (np.array(peak_red[1:]) - np.array(valley_red))/np.array(peak_red[1:])
-r_ir = (np.array(peak_ir[1:]) - np.array(valley_ir))/np.array(peak_ir[1:])
-# r_ir = (np.array[1:peak_ir] - np.array[1:valley_ir])/np.array(peak_ir)
+plt.plot(t, red_dc_cheby2, "k", label="Sinal PPG ")
+plt.plot(time_p_red, peak_red, "b.", label="Picos e vales")
+plt.plot(time_v_red, valley_red, "b.")#, label="Vales")
+plt.plot(vec_media_peak_red_time, vec_media_peak_red,"r", label="Limiar de picos e vales")
+plt.plot(vec_media_valley_red_time, vec_media_valley_red,"r")#, label="Limiar de vales")
+plt.legend()
+plt.show()
 
 
+# Calcular o valor R 
 
-r = r_red[69:]/r_ir
+r_ir = np.array(peak_ir)-np.array(valley_ir)/np.array(peak_ir)
+r_red = np.array(peak_red)-np.array(valley_red)/np.array(peak_red)
 
-k = []
-for i in range(len(r)):
-    if ((r[i] <= 1.0) and r[i] >= 0):
-        k.append(r[i])
+R = r_red/r_ir
 
-k = np.array(k)
-print(r)
-print(len(r_red))
-print(len(r_ir))
-print(type(peak_red[0]))
-# print(type(peak_ir[0]))
 
-#%%
 #SPO2 function
 
 A = 110
 B = -25
 rfunction = lambda R: A + B * R 
 
-spo2_test = rfunction(k)
+SPO2 = rfunction(R)
 
-if PLOTS:
-    plt.stem(spo2_test, label = 'SpO2')  # type: ignore
-    plt.legend()
-    plt.show()
+SPO2_media = numpy.mean(SPO2)
 
+print('O valor de SpO2 é :', np.int(SPO2_media))
 
-    
-
-# value_r = r[k]
-
-a_ = 94 #110
-b_ = -25
-rfunction_ = lambda R_: a_ + b_ * R_
-
-# spo2_ = rfunction_(value_r)
-
-print(np.mean(spo2_test))
-# print(np.mean(spo2_))
-print("FIM")
-
-# In[]:
-ppg = ir_dc_cheby2
-l_ir, lnn_ir, lnn_off_ir, lnn_th_ir = adaptative_th(ppg_ir,fs)
-
-# Plot Envelope & Threshold Marks
-
-if PLOTS:
-    fig, ax = plt.subplots()
-    plt.plot(l_ir, "k", label="PPG Mask")
-    plt.plot(lnn_ir, lnn_th_ir, "r", label="Threshold")
-    plt.stem(lnn_ir, l_ir[lnn_ir], label="ON")  # type: ignore
-    # plt.stem(lnn_off, l[lnn_off], label='OFF') # type: ignore
-    plt.minorticks_on()
-    plt.grid(True, which="major")
-    plt.grid(True, which="minor", alpha=0.6)
-    plt.legend()
-    plt.show()
-
-# In[]:
-# Interpolate threshold for all points +th, None
-th = np.interp(np.arange(0, len(ppg_ir)), lnn_ir, lnn_th_ir)
-PKS_DIST = np.ceil(300e-3 * fs)
-# Peaks above threshold
-p_pks, _ = find_peaks(ppg_ir, height=(+th, None), distance=PKS_DIST)
-# Valleys below threshold
-n_pks, _ = find_peaks(-ppg_ir, height=(+th, None), distance=PKS_DIST)  # type:ignore
-pks = np.sort(np.concatenate((p_pks, n_pks)))
-
-# In[]:
-# Plot Original Signal & Peak Threshold
-if PLOTS:
-    fig, ax = plt.subplots()
-    plt.plot(t, ppg_ir, "k", label="PPG")
-    plt.plot(t[lnn_ir], lnn_th_ir, "r", t[lnn_ir], -lnn_th_ir, "r", label="Threshold")
-    plt.stem(t[pks], ppg_ir[pks], label="Peaks")  # type: ignore
-    plt.minorticks_on()
-    plt.grid(True, which="major")
-    plt.grid(True, which="minor", alpha=0.6)
-    plt.legend()
-
-# In[]:
-#RED Thresholding
-ppg_red = red_dc_cheby2
-l_red, lnn_red, lnn_off_red, lnn_th_red = adaptative_th(ppg_red,fs)
-
-# Interpolate threshold for all points +th, None
-thr = np.interp(np.arange(0, len(ppg_red)), lnn_red, lnn_th_red)
-PKS_DISTR = np.ceil(300e-3 * fs)
-# Peaks above threshold
-rp_pks, _ = find_peaks(ppg_red, height=(+thr, None), distance=PKS_DISTR)
-# Valleys below threshold
-rn_pks, _ = find_peaks(-ppg_red, height=(+thr, None), distance=PKS_DISTR)  # type:ignore
-rpks = np.sort(np.concatenate((rp_pks, rn_pks)))
-
-#%%
-if PLOTS:
-    fig, ax = plt.subplots()
-    plt.plot(t, ppg_red, "k", label="PPG")
-    # plt.plot(t[lnn_red], lnn_th_red, "r", t[lnn_red], -lnn_th_red, "r", label="Threshold")
-    plt.stem(t[rpks], ppg_red[rpks], label="Peaks")  # type: ignore
-    plt.minorticks_on()
-    plt.grid(True, which="major")
-    plt.grid(True, which="minor", alpha=0.6)
-    plt.legend()
-
-
-#%%
-
-lpev_red = fix_pev(ppg_red,rpks)
-lpev_ir = fix_pev(ppg_ir,pks)
-#%%
-
-l_neg_ir, l_pos_ir, x_ir = loc_pev(lpev_ir)
-l_neg_red, l_pos_red, x_red = loc_pev(lpev_red)
-
-#%%
-def orderedsearch(data, alist, item):
-    
-    for i, w in enumerate(alist): #range(len(alist)):
-        if data[w] == item:
-            return w
-    return None    
-
-y_red = []
-
-for i in range(len(x_red)):
-    pos = orderedsearch(ppg_red, rpks, x_red[i])
-    if pos is not None:
-        y_red.append(pos)
-    else:
-        None
-
-y_ir = []
-
-for i in range(len(x_ir)):
-    posir = orderedsearch(ppg_ir, pks, x_ir[i])
-    if posir is not None:
-        y_ir.append(posir)
-    else:
-        None
-
-
-#%%
-#AC/DC 
-
-acdc_ir = x_ir-l_neg_ir/y_ir #peaky location aaaaa 
-acdc_red = x_red-l_neg_red/y_red #peaky location aaaaa
-# 
-acdc_ir = np.concatenate((acdc_ir, acdc_ir[len(acdc_ir)-(len(acdc_red)-len(acdc_ir)):len(acdc_ir)]))
-
-R = acdc_red/acdc_ir
-
-#%%
-
-k = []
-for i in range(len(R)):
-    if R[i] <= 0.98:
-        k.append(i)
-    
-k = np.array(k)
-
-#%%
-
-R = R[k]
-
-A = 110
-B = -25
-rfunction = lambda r: A + B * r 
-
-spo2_test = rfunction(R)
-
-#%%
-beats_t = t[y_ir]
-beats_RR = np.diff(beats_t)
-# RR -> HR (bpm)
-HR = 60/beats_RR
-
-
-# %%
-# Z = red_lp_cheby2/red_dc_cheby2
-# Y = ir_lp_cheby2/ir_dc_cheby2
-# J = Z/Y
-# A= 110
-# B = -25
-# rfunction = lambda r: A + B * r 
-
-# spo2_test = rfunction(J)
-# %%
-spo2 = spo2[~np.isnan(spo2)]
