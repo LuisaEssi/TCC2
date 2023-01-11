@@ -33,7 +33,7 @@ inc_sec = 2560
 
 # inicio = 355072  # Spo2 = 89 - ok
 # inicio = 470*256 # Spo2 = 95/96 -ok
-# inicio = 1140*256 # Spo2 = 94 - cagado
+# inicio = 1140*256 # Spo2 = 94 - não
 # inicio = 1660*256 # Spo2 = 87
 # inicio = 3024*256 # Spo2 = 91 - ok
 
@@ -43,8 +43,8 @@ inc_sec = 2560
 
 #SUBJECT8
 
-# inicio = 2305*256 # Spo2 = 96 - OK
-inicio = 2680*256 # Spo2 = 98 - OK
+inicio = 2305*256 # Spo2 = 96 - OK
+# inicio = 2680*256 # Spo2 = 98 - OK
 
 
 # Time array
@@ -124,6 +124,8 @@ def find_peak_valley_2(sample, time, threshold, order,gain):
     vec_media_valley_time = []
     limite = 0.3
     
+    peak_lock = False
+    valley_lock = False
 
     while (i < len(sample)):
         if i>= 2:
@@ -144,16 +146,18 @@ def find_peak_valley_2(sample, time, threshold, order,gain):
                             value_possible_valley = sample[i]
                             time_possible_valley = time[i]
                                                         
-                    if (possible_peak == True):                        
+                    if ((possible_peak == True)):                        
                         if (sample[i-1]>value_possible_peak):
                             peak_vector[0] = sample[i-1]
                             media_peak = ((np.sum(peak_vector))/order)
                             peak_vector=np.roll(peak_vector,1)
-                            vec_media_peak.append(media_peak*limiar)
+                            vec_media_peak.append(media_peak*limite)
                             vec_media_peak_time.append(time[i-1])
-                            if (abs(media_peak*limite)<=abs(sample[i-1])):
+                            if ((abs(media_peak*limite)<=abs(sample[i-1])) and (peak_lock == False)):
                                 time_peak.append(time[i-1])
                                 value_peak.append(sample[i-1])
+                                peak_lock = True
+                                valley_lock = False
                                 
                         else:
                             peak_vector[0]=value_possible_peak
@@ -161,21 +165,24 @@ def find_peak_valley_2(sample, time, threshold, order,gain):
                             peak_vector=np.roll(peak_vector,1)
                             vec_media_peak.append(media_peak*limite)
                             vec_media_peak_time.append(time_possible_peak)
-                            if (abs(media_peak*limite)<=abs(value_possible_peak)):
+                            if ((abs(media_peak*limite)<=abs(value_possible_peak)) and (peak_lock == False)):
                                     time_peak.append(time_possible_peak)
                                     value_peak.append(value_possible_peak)
-                                    
-                                    
-                        if (possible_valley == True): 
+                                    peak_lock = True
+                                    valley_lock = False
+                                                                        
+                        if ((possible_valley == True) ): 
                             valley_vector[0]=value_possible_valley
                             media_valley = ((np.sum(valley_vector))/order)
                             valley_vector= np.roll(valley_vector,1) 
                             vec_media_valley.append(media_valley*limite)
                             vec_media_valley_time.append(time_possible_valley)
-                            if ((media_valley*limite)>=(value_possible_valley)):
+                            if (((media_valley*limite)>=(value_possible_valley)) and (valley_lock == False)):
                                 time_valley.append(time_possible_valley)
                                 value_valley.append(value_possible_valley)
                                 possible_valley = False 
+                                valley_lock = True
+                                peak_lock = False
                                                                                                           
                         possible_peak = False
                 num_upsteps = 0
@@ -208,6 +215,9 @@ peak_red,valley_red, time_p_red,time_v_red,vec_media_peak_red,\
 vec_media_valley_red,vec_media_peak_red_time,\
 vec_media_valley_red_time = find_peak_valley_2(red_dc_cheby2, t, threshold_peak_valley, avg_order,2)
 
+
+
+
 #PLOT IR com sinal vindo do filtro Cheby2, limiar e pontos de Picos e vales encontrados 
 plt.plot(t, ir_dc_cheby2, "k", label="PPG Cheby2")
 plt.plot(time_p_ir, peak_ir, "r.", label="Threshold Peaks IR")
@@ -228,12 +238,33 @@ plt.legend()
 plt.show()
 
 
+
+#igualando os valores de picos e vales para o cálculo de R
+
+if((len(peak_ir)>len(valley_ir))):
+    r_ir = np.array(peak_ir[0:len(valley_ir)])-np.array(valley_ir)/np.array(peak_ir[0:len(valley_ir)])
+else:
+    r_ir = np.array(peak_ir)-np.array(valley_ir[0:len(peak_ir)])/np.array(peak_ir)
+
+if((len(peak_red)>len(valley_red))):
+    r_red = np.array(peak_red[0:len(valley_red)])-np.array(valley_red)/np.array(peak_red[0:len(valley_red)])
+else:
+    r_red = np.array(peak_red)-np.array(valley_red[0:len(peak_red)])/np.array(peak_red)
+
 # Calcular o valor R 
 
-r_ir = np.array(peak_ir)-np.array(valley_ir)/np.array(peak_ir)
-r_red = np.array(peak_red)-np.array(valley_red)/np.array(peak_red)
+if(len(r_ir) > len(r_red)):
+    R = r_red/r_ir[0:len(r_red)]
+else:
+    R = r_red[0:len(r_ir)]/r_ir
 
-R = r_red/r_ir
+
+# # Calculando R
+
+# r_ir = np.array(peak_ir)-np.array(valley_ir)/np.array(peak_ir)
+# r_red = np.array(peak_red)-np.array(valley_red)/np.array(peak_red)
+
+# R = r_red/r_ir
 
 
 #SPO2 function
