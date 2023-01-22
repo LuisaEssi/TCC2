@@ -9,6 +9,17 @@ from matplotlib import rc
 from scipy.signal import find_peaks
 from filterbanks import cheby2_filter, cheby2_bandpass_filter, butter_filter, butter_bandpass_filter
 from threshold_pev import adaptative_th, fix_pev, loc_pev
+import signal_hw
+from serial.tools.list_ports import comports
+
+
+import serial
+import time
+
+
+MAX_BUFF_LEN = 15
+SETUP 		 = False
+port 		 = None
 
 ZERO_PHASE_FILTERS = True
 PLOTS = True
@@ -17,9 +28,13 @@ PLOTS = True
 # Load Subject Data using helper function
 from utils import SubjectPPGRecord
 
+# MAT_FILE = "Subject1"
+# MAT_FILE = "Subject3"
+# MAT_FILE = "Subject5"
 # MAT_FILE = "Subject6"
 MAT_FILE = "Subject8"
 # MAT_FILE = "Subject14"
+
 sub = SubjectPPGRecord(MAT_FILE, db_path="ppg/", mat=True)
 rec = sub.record
 fs = sub.fs
@@ -29,77 +44,51 @@ spo2 = rec.spo2
 inc_sec = 2560
 
 
+
 #SUBJECT14
 
 # inicio = 355072  # Spo2 = 89 - ok
-# inicio = 470*256 # Spo2 = 95/96 -ok
-# inicio = 1140*256 # Spo2 = 94 - não
-# inicio = 1660*256 # Spo2 = 87
-# inicio = 3024*256 # Spo2 = 91 - ok
+inicio = 1380*256  # Spo2 = 89 - ______ok
 
 #SUBJECT6
 
 # inicio = 3171*256 # Spo2 = 94 - ok ORDEM = 150 E PASSO = 0,04s
+# inicio = 1543*256 # Spo2 = 94 - ok ORDEM = 150 E PASSO = 0,04s
+# inicio = 1615*256 # Spo2 = 94 - ______________OK 
 
 #SUBJECT8
 
-inicio = 2305*256 # Spo2 = 96 - OK
-# inicio = 2680*256 # Spo2 = 98 - OK
+inicio = 2315*256 # Spo2 = 96 - OK
 
+#SUBJECT1
+
+# inicio = 2120 *256 #Spo2 = 95%  Tempo = 93
+# inicio = 1925 *256 #Spo2 = 95%  Tempo = 93___OK
+
+
+#SUBJECT3
+# inicio = 740 *256 #Spo2 = 97%  Tempo = 93
+# inicio = 370 *256 #Spo2 = 97%  Tempo = 93
+
+
+#SUBJECT5
+# inicio = 2400*256 #Spo2 = 97%  Tempo = 
 
 # Time array
 
-print(f"PPG Signal contains {len(red_ppg)} samples and {len(red_ppg)/fs} sec. duration.")
+# print(f"PPG Signal contains {len(red_ppg)} samples and {len(red_ppg)/fs} sec. duration.")
 
+
+#DADOS HARDWARE
+# inc_sec = 1500
+# # inicio = 0
+# fs = 250
+# sred, sir, red_ppg, ir_ppg = signal_hw.signal_extract(arquivo = "ppg/txt_hw/weliton.txt",freq = fs)
+# sred, sir, red_ppg, ir_ppg = signal_hw.signal_extract(arquivo = "ppg/txt_hw/teste_18_01_anso.txt",freq = fs)
+
+# print(f"PPG Signal contains {len(red_ppg)} samples and {len(red_ppg)/fs} sec. duration.")
 
 # In[]:
-
-red = red_ppg[inicio:inicio+inc_sec]
-ir = ir_ppg[inicio:inicio+inc_sec]
-
-t = np.linspace(0, ((len(red) / fs)), len(red))
-
-
-### BUTTER
-# LOWPASS FILTER
-cutoff_lp = 8  # desired cutoff frequency of the filter, Hz
-LP_ORDER = 8
-red_lp = butter_filter(red, cutoff_lp, fs, order=LP_ORDER)
-ir_lp = butter_filter(ir, cutoff_lp, fs, order=LP_ORDER)
-
-# HIGHPASS SIGNAL
-cutoff_dc = 0.4
-HP_ORDER = 8
-red_hp = butter_filter(red_lp, cutoff_dc, fs, order=HP_ORDER, btype="high") 
-ir_hp = butter_filter(ir_lp, cutoff_dc, fs, order=HP_ORDER, btype="high")
-
-# BANDPASS SIGNAL
-BP_ORDER = 8
-red_bp = butter_bandpass_filter(red, cutoff_dc, cutoff_lp, fs, order=BP_ORDER)
-ir_bp = butter_bandpass_filter(ir, cutoff_dc, cutoff_lp, fs, order=BP_ORDER)
-
-# sinal red_bp e ir_bp filtrado pelo butter 
-
-###CHEBY2
-
-# LOWPASS FILTER
-cutoff_lp2 = 6 # frequencia de corte
-rs = 26
-
-red_lp_cheby2 = cheby2_filter(red, cutoff_lp, fs, order=LP_ORDER, rs = rs) # btype="low"
-ir_lp_cheby2 = cheby2_filter(ir, cutoff_lp, fs, order=LP_ORDER, rs = rs)
-
-# HIGHPASS SIGNAL    # freq de corte pra remover sinal DC
-HP_ORDER_CH = 6
-red_dc_cheby2 = cheby2_filter(red_lp_cheby2, cutoff_dc, fs, order=HP_ORDER_CH, rs = rs, btype="high")
-ir_dc_cheby2 = cheby2_filter(ir_lp_cheby2, cutoff_dc, fs, order=HP_ORDER_CH, rs = rs, btype="high")
-
-# sinal red_dc_cheby2 e ir_dc_cheby2 finaç filtrado pelo cheby2
-
-
-
-#funcao calcula os valores de limiares para que armazer os possiceis picos e os vales do sinal
-
 def find_peak_valley_2(sample, time, threshold, order,gain):
 
     i = 1
@@ -122,8 +111,7 @@ def find_peak_valley_2(sample, time, threshold, order,gain):
     vec_media_peak_time = []
     vec_media_valley = []
     vec_media_valley_time = []
-    limite = 0.3
-    
+    limite = 0.4
     peak_lock = False
     valley_lock = False
 
@@ -190,92 +178,417 @@ def find_peak_valley_2(sample, time, threshold, order,gain):
         i = i + 1
                 
     threshold = 0.6 * num_upsteps
+
     return value_peak, value_valley, time_peak, time_valley,vec_media_peak,\
            vec_media_valley,vec_media_peak_time,vec_media_valley_time
 
-vec_media_peak_ir = []
-vec_media_valley_ir  = []
-vec_media_peak_red = []
-vec_media_valley_red  = []
-vec_media_peak_red_time = []
-vec_media_valley_red_time  = []
-vec_media_peak_ir_time = []
-vec_media_valley_ir_time  = []
 
-avg_order = 5
-threshold_peak_valley = 25
+while(1):
+    ports = [port for port in comports()]
+    portIndex = 0
+    if len(ports) <= 0:
+        print("Nenhum aparelho conectado, abortando codigo")
+        exit()
+    elif len(ports) == 1:
+        print("Usando porta USB {}".format(ports[portIndex].device))
+    else:
+        print("Portas USB disponiveis:")
+        i=0
+        for port in ports:
+            print("{}- {}".format(i, port.device))
+            i+=1
 
-
-peak_ir,valley_ir, time_p_ir,time_v_ir,vec_media_peak_ir,\
-vec_media_valley_ir,vec_media_peak_ir_time,\
-vec_media_valley_ir_time = find_peak_valley_2(ir_dc_cheby2, t, threshold_peak_valley,avg_order,2)
-
-
-peak_red,valley_red, time_p_red,time_v_red,vec_media_peak_red,\
-vec_media_valley_red,vec_media_peak_red_time,\
-vec_media_valley_red_time = find_peak_valley_2(red_dc_cheby2, t, threshold_peak_valley, avg_order,2)
-
+    port = ports[portIndex].device
+    # port = "/dev/ttyUSB0"
+    baudrate = 9600
+    # fileName = "data.txt"
 
 
+    fs = int((500/baudrate)*1000)
+    inc_sec = int(fs* 10)
+    samples = inc_sec # 6sec for processing data 
 
-#PLOT IR com sinal vindo do filtro Cheby2, limiar e pontos de Picos e vales encontrados 
-plt.plot(t, ir_dc_cheby2, "k", label="PPG Cheby2")
-plt.plot(time_p_ir, peak_ir, "r.", label="Threshold Peaks IR")
-plt.plot(time_v_ir, valley_ir, "g.", label="Threshold Valley IR")
-plt.plot(vec_media_peak_ir_time, vec_media_peak_ir,"y", label="Media peak IR")
-plt.plot(vec_media_valley_ir_time, vec_media_valley_ir,"m", label="Media valley IR")
-plt.legend()
-plt.show()
 
-#PLOT RED com sinal vindo do filtro Cheby2, limiar e pontos de Picos e vales encontrados
+    ser = serial.Serial(port,baudrate)
+
+    print("Connected to ESP port:" + port)
+    ser.flushInput()
+    print("Abrindo Serial")
+
+    # file = open(fileName, "w")
+    # print("Arquivo criado")
+
+    line = 0
+    vec = []
+    while line < samples:
+        data = str(ser.readline().decode("utf-8"))
+        # data = data[0:][:-2]
+        vec.append(data)
+        # print(data)
+        # file = open(fileName,"a")
+        # file.write(data)
+        # file.write(data + "\n")
+        line = line+1
+
+    # print(len(vec))
+    # print(vec)
+
+    print("Final de leituras")
+    # file.close()
+
+
+    # prev = time.time()
+    # while(not SETUP):
+    # 	try:
+    # 		# 					 Serial port(windows-->COM), baud rate, timeout msg
+    # 		port = serial.Serial("/dev/ttyUSB0", 115200, timeout=1)
+
+    # 	except: # Bad way of writing excepts (always know your errors)
+    # 		if(time.time() - prev > 2): # Don't spam with msg
+    # 			print("No serial detected, please plug your uController")
+    # 			prev = time.time()
+
+    # 	if(port is not None): # We're connected
+    # 		SETUP = True
+
+
+    # vec = ["                     "]*1500
+
+
+
+    # red_bac = red_ppg[inicio:inicio+inc_sec]
+    # ir_bac = ir_ppg[inicio:inicio+inc_sec]
+    # data_sensor = open("dados.txt",'w')
+    # received_data = ''
+
+    # while ( inc < inc_sec):
+    #     if (port.in_waiting>0):
+    #         received_data = port.read(24)
+    #         # print(received_data)
+    #         received_data = received_data.decode()
+    #         # print(received_data)
+    #         received_data = received_data.rstrip()
+    #         data_sensor.write(received_data)
+    #         # print(received_data)
+    #         vec[inc] = received_data
+    #         inc = inc + 1
+        # print(len(vec))
+
+    # print(vec[0])
+
+    ##SERIAL
+    red_ppg = []
+    ir_ppg = []
+
+    inicio = 0
+    vec = vec[1:len(vec)-2]
+    for i in range(len(vec)):
+        red_usb,ir_usb = vec[i].split(",")
+        red_ppg.append(float(red_usb))
+        ir_ppg.append(float(ir_usb))
+
     
-plt.plot(t, red_dc_cheby2, "k", label="Sinal PPG ")
-plt.plot(time_p_red, peak_red, "b.", label="Picos e vales")
-plt.plot(time_v_red, valley_red, "b.")#, label="Vales")
-plt.plot(vec_media_peak_red_time, vec_media_peak_red,"r", label="Limiar de picos e vales")
-plt.plot(vec_media_valley_red_time, vec_media_valley_red,"r")#, label="Limiar de vales")
-plt.legend()
-plt.show()
+    red_bac = red_ppg[inicio:inicio+inc_sec]
+    ir_bac = ir_ppg[inicio:inicio+inc_sec]
+    print(len(red_bac))
+    t = np.linspace(0, ((samples / fs)), len(red_bac))
+
+    ambiente = [3.3]*len(red_bac)
+
+    #Plot original
+    # plt.plot(t, red_bac, "r", label= "Sinal Vermelho")
+    # plt.plot(t, ir_bac,"b", label= "Sinal Infravermelho")
+    # # plt.plot(t, ambiente,"k", label= "Luz ambiente", linewidth = 1.0)
+    # plt.xlabel("Tempo (s)")
+    # plt.ylabel("Amplitude (mV)")
+    # plt.legend()
+    # plt.show()
+
+    cutoff_lac = 0.4
+    cutoff_hac = 8
+    BP_ORDER = 8
+
+    red = butter_bandpass_filter(red_bac, cutoff_lac, cutoff_hac, fs, order=BP_ORDER)
+    ir = butter_bandpass_filter(ir_bac, cutoff_lac, cutoff_hac, fs, order=BP_ORDER)
+
+    ### BUTTER
+    # LOWPASS FILTER
+    cutoff_lp = 8  # desired cutoff frequency of the filter, Hz
+    LP_ORDER = 8
+    red_lp = butter_filter(red, cutoff_lp, fs, order=LP_ORDER)
+    ir_lp = butter_filter(ir, cutoff_lp, fs, order=LP_ORDER)
+
+    # HIGHPASS SIGNAL
+    cutoff_dc = 0.4
+    HP_ORDER = 8
+    red_hp = butter_filter(red_lp, cutoff_dc, fs, order=HP_ORDER, btype="high") 
+    ir_hp = butter_filter(ir_lp, cutoff_dc, fs, order=HP_ORDER, btype="high")
+
+    # BANDPASS SIGNAL
+    BP_ORDER = 8
+    red_bp = butter_bandpass_filter(red, cutoff_dc, cutoff_lp, fs, order=BP_ORDER)
+    ir_bp = butter_bandpass_filter(ir, cutoff_dc, cutoff_lp, fs, order=BP_ORDER)
+
+    # sinal red_bp e ir_bp filtrado pelo butter 
+
+    ###CHEBY2
+
+    # LOWPASS FILTER
+    cutoff_lp2 = 6 # frequencia de corte
+    rs = 26
+
+    red_lp_cheby2 = cheby2_filter(red, cutoff_lp, fs, order=LP_ORDER, rs = rs) # btype="low"
+    ir_lp_cheby2 = cheby2_filter(ir, cutoff_lp, fs, order=LP_ORDER, rs = rs)
+
+    # HIGHPASS SIGNAL    # freq de corte pra remover sinal DC
+    HP_ORDER_CH = 6
+    red_dc_cheby2 = cheby2_filter(red_lp_cheby2, cutoff_dc, fs, order=HP_ORDER_CH, rs = rs, btype="high")
+    ir_dc_cheby2 = cheby2_filter(ir_lp_cheby2, cutoff_dc, fs, order=HP_ORDER_CH, rs = rs, btype="high")
+
+    # sinal red_dc_cheby2 e ir_dc_cheby2 finaç filtrado pelo cheby2
+
+
+    #Sinais Cheby2, limiar e pontos de Picos e vales encontrados com duas imagens IR e R 
+
+    # Filtragem do sinal R com Chebychev tipo II
+    # plt.subplot(2, 2, 1)
+    # plt.plot(t,red_bac,"r", label = "Sinal RED original")
+    # plt.ylabel("Amplitude [mV]")
+    # plt.xlabel("Tempo [segundos]")
+    # plt.legend()
+    # plt.subplot(2, 2, 2)
+    # plt.plot(t,ir_bac,"b", label = "Sinal IR original")
+    # plt.ylabel("Amplitude [mV]")
+    # plt.xlabel("Tempo [segundos]")
+    # plt.legend()
+    # plt.subplot(2, 2, 3)
+    # plt.plot(t,red_dc_cheby2,"r", label = "Sinal RED filtrado com Chebychev tipo II")
+    # plt.ylabel("Amplitude [mV]")
+    # plt.xlabel("Tempo [segundos]")
+    # plt.legend()
+    # plt.subplot(2, 2, 4)
+    # plt.plot(t,ir_dc_cheby2,"b", label = "Sinal IR filtrado com Chebychev tipo II")
+    # plt.ylabel("Amplitude [mV]")
+    # plt.xlabel("Tempo [segundos]")
+    # plt.legend()
+    # plt.show()
 
 
 
-#igualando os valores de picos e vales para o cálculo de R
 
-if((len(peak_ir)>len(valley_ir))):
-    r_ir = np.array(peak_ir[0:len(valley_ir)])-np.array(valley_ir)/np.array(peak_ir[0:len(valley_ir)])
-else:
-    r_ir = np.array(peak_ir)-np.array(valley_ir[0:len(peak_ir)])/np.array(peak_ir)
+    #CALCULOS PARA FFT
 
-if((len(peak_red)>len(valley_red))):
-    r_red = np.array(peak_red[0:len(valley_red)])-np.array(valley_red)/np.array(peak_red[0:len(valley_red)])
-else:
-    r_red = np.array(peak_red)-np.array(valley_red[0:len(peak_red)])/np.array(peak_red)
+    #IR
 
-# Calcular o valor R 
+    c_ir_or = np.abs(fftshift(fft(ir_ppg)))
 
-if(len(r_ir) > len(r_red)):
-    R = r_red/r_ir[0:len(r_red)]
-else:
-    R = r_red[0:len(r_ir)]/r_ir
+    abs_ir_cor = c_ir_or[:int(np.floor(len(c_ir_or)/2))]
 
+    f1 = np.linspace(0, fs/2, num = len(abs_ir_cor))
 
-# # Calculando R
+    abs_ir_cr  = abs_ir_cor /np.max(abs_ir_cor)
+    abs_ir_cr = np.flipud(abs_ir_cr[0::])
 
-# r_ir = np.array(peak_ir)-np.array(valley_ir)/np.array(peak_ir)
-# r_red = np.array(peak_red)-np.array(valley_red)/np.array(peak_red)
+    #IR com
 
-# R = r_red/r_ir
+    c_ir_fil = np.abs(fftshift(fft(ir_dc_cheby2)))
+
+    abs_ir_cfil = c_ir_fil[:int(np.floor(len(c_ir_fil)/2))]
+
+    f2 = np.linspace(0, fs/2, num = len(abs_ir_cfil))
+
+    abs_ir_fil  = abs_ir_cfil /np.max(abs_ir_cfil)
+    abs_ir_fil = np.flipud(abs_ir_fil[0::])
 
 
-#SPO2 function
+    #RED sem
 
-A = 110
-B = -25
-rfunction = lambda R: A + B * R 
+    c_red_or = np.abs(fftshift(fft(red_ppg)))
 
-SPO2 = rfunction(R)
+    abs_red_cor = c_red_or[:int(np.floor(len(c_red_or)/2))]
 
-SPO2_media = numpy.mean(SPO2)
+    f3 = np.linspace(0, fs/2, num = len(abs_red_cor))
 
-print('O valor de SpO2 é :', np.int(SPO2_media))
+    abs_red_cr  = abs_red_cor /np.max(abs_red_cor)
+    abs_red_cr = np.flipud(abs_red_cr[0::])
+
+
+    #RED com
+
+    c_red_fil = np.abs(fftshift(fft(red_dc_cheby2)))
+
+    abs_red_cfil = c_red_fil[:int(np.floor(len(c_red_fil)/2))]
+
+    f4 = np.linspace(0, fs/2, num = len(abs_red_cfil))
+
+    abs_red_fil  = abs_red_cfil /np.max(abs_red_cfil)
+    abs_red_fil = np.flipud(abs_red_fil[0::])
+
+
+    #PLOTS
+
+    # plt.subplot(2, 2, 2)
+    # plt.plot(f1,abs_ir_cr,"b", label = "FFT do sinal IR sem filtragem")
+    # plt.ylabel("Amplitude [mV]")
+    # plt.xlabel("Frequencia [Hz]")
+    # plt.legend()
+    # plt.subplot(2, 2, 1)
+    # plt.plot(f3,abs_red_cr,"r", label = "FFT do sinal RED sem filtragem")
+    # plt.ylabel("Amplitude [mV]")
+    # plt.xlabel("Frequencia [Hz]")
+    # plt.legend()
+    # plt.subplot(2, 2, 4)
+    # plt.plot(f2,abs_ir_fil,"b", label = "FFT do sinal IR com filtragem")
+    # plt.ylabel("Amplitude [mV]")
+    # plt.xlabel("Frequencia [Hz]")
+    # plt.legend()
+    # plt.subplot(2, 2, 3)
+    # plt.plot(f4,abs_red_fil,"r", label = "FFT do sinal RED com filtragem")
+    # plt.ylabel("Amplitude [mV]")
+    # plt.xlabel("Frequencia [Hz]")
+    # plt.legend()
+    # plt.show()
+
+    # plt.plot(t, ir, "r",  linewidth = 1, label="Sinal IR original")
+    # plt.plot(t, ir_dc_cheby2, "k",  linewidth = 1, label="Sinal IR filtrado")
+    # plt.ylabel("Amplitude [mV]")
+    # plt.xlabel("Tempo [segundos]")
+    # plt.legend()
+    # plt.show()
+
+    # calculo na frequencia
+    frequencia = f4[np.where(abs_ir_fil ==np.max(abs_ir_fil))]
+    BPM = frequencia*60
+    print(BPM, "bpm")
+
+
+    #funcao calcula os valores de limiares para que armazer os possiceis picos e os vales do sinal
+
+
+    vec_media_peak_ir = []
+    vec_media_valley_ir  = []
+    vec_media_peak_red = []
+    vec_media_valley_red  = []
+    vec_media_peak_red_time = []
+    vec_media_valley_red_time  = []
+    vec_media_peak_ir_time = []
+    vec_media_valley_ir_time  = []
+
+    avg_order = 5
+    # threshold_peak_valley = 25
+    threshold_peak_valley = 5
+
+
+    peak_ir,valley_ir, time_p_ir,time_v_ir,vec_media_peak_ir,\
+    vec_media_valley_ir,vec_media_peak_ir_time,\
+    vec_media_valley_ir_time = find_peak_valley_2(ir_dc_cheby2, t, threshold_peak_valley,avg_order,2)
+
+
+    peak_red,valley_red, time_p_red,time_v_red,vec_media_peak_red,\
+    vec_media_valley_red,vec_media_peak_red_time,\
+    vec_media_valley_red_time = find_peak_valley_2(red_dc_cheby2, t, threshold_peak_valley, avg_order,2)
+
+
+
+
+    #PLOT IR com sinal vindo do filtro Cheby2, limiar e pontos de Picos e vales encontrados 
+    # plt.plot(t, ir_dc_cheby2, "k", label="PPG Cheby2")
+    # plt.plot(time_p_ir, peak_ir, "r.", label="Threshold Peaks IR")
+    # plt.plot(time_v_ir, valley_ir, "g.", label="Threshold Valley IR")
+    # plt.plot(vec_media_peak_ir_time, vec_media_peak_ir,"y", label="Media peak IR")
+    # plt.plot(vec_media_valley_ir_time, vec_media_valley_ir,"m", label="Media valley IR")
+    # plt.legend()
+    # plt.show()
+
+    #PLOT RED e IR com sinal vindo do filtro Cheby2, limiar e pontos de Picos e vales encontrados
+
+    # plt.subplot(2, 1, 1)
+    # plt.plot(t, red_dc_cheby2, "r", label="Sinal RED PPG ")
+    # plt.plot(time_p_red, peak_red, "g.", label="Picos e vales")
+    # plt.plot(time_v_red, valley_red, "g.")#, label="Vales")
+    # plt.plot(vec_media_peak_red_time, vec_media_peak_red,"k", label="Limiar de picos e vales")
+    # plt.plot(vec_media_valley_red_time, vec_media_valley_red,"k")#, label="Limiar de vales")
+    # plt.legend()
+
+    # plt.subplot(2, 1, 2)
+    # plt.plot(t, ir_dc_cheby2, "b", label="Sinal IR PPG ")
+    # plt.plot(time_p_ir, peak_ir, "g.", label="Picos e vales")
+    # plt.plot(time_v_ir, valley_ir, "g.")#, label="Vales")
+    # plt.plot(vec_media_peak_ir_time, vec_media_peak_ir,"k", label="Limiar de picos e vales")
+    # plt.plot(vec_media_valley_ir_time, vec_media_valley_ir,"k")#, label="Limiar de vales")
+    # plt.legend()
+
+
+
+    # plt.show()
+
+
+
+    #igualando os valores de picos e vales para o cálculo de R
+
+    if((len(peak_ir)>len(valley_ir))):
+        r_ir = np.array(peak_ir[0:len(valley_ir)])-np.array(valley_ir)/np.array(peak_ir[0:len(valley_ir)])
+    else:
+        r_ir = np.array(peak_ir)-np.array(valley_ir[0:len(peak_ir)])/np.array(peak_ir)
+
+    if((len(peak_red)>len(valley_red))):
+        r_red = np.array(peak_red[0:len(valley_red)])-np.array(valley_red)/np.array(peak_red[0:len(valley_red)])
+    else:
+        r_red = np.array(peak_red)-np.array(valley_red[0:len(peak_red)])/np.array(peak_red)
+
+    # Calcular o valor R 
+
+    if(len(r_ir) > len(r_red)):
+        R = r_red/r_ir[0:len(r_red)]
+    else:
+        R = r_red[0:len(r_ir)]/r_ir
+
+
+    # # Calculando R
+
+    # r_ir = np.array(peak_ir)-np.array(valley_ir)/np.array(peak_ir)
+    # r_red = np.array(peak_red)-np.array(valley_red)/np.array(peak_red)
+
+    # R = r_red/r_ir
+
+
+    #SPO2 function
+    # SpO2 = -15 * R + 110;
+
+    A = 110
+    B = -15
+
+    rfunction = lambda R: A + B * R 
+
+    SPO2 = rfunction(R)
+
+    SPO2_media = numpy.mean(SPO2)
+    if (SPO2_media > 100):
+        print('ERRO')
+    else:
+        print('O valor de SpO2 é (t) :', np.int(SPO2_media),'%')
+
+    periodo = inc_sec/fs
+    periodo2 = abs(time_p_ir[0] - time_p_ir[len(time_p_ir)-1])
+    # print('P:', np.int(periodo2),"segundos")
+    quant_peak = len(peak_ir)
+    BPM = (quant_peak/periodo)*60
+    print('FC:', np.int(BPM),"bpm")
+
+
+
+
+
+    # read one char (default))
+
+    # Write whole strings
+    def write_ser(cmd):
+        cmd = cmd + '\n'
+        ser.write(cmd.encode())
+
+    write_ser('SpO2: ' + str(int(SPO2_media))+ '%' + ' FC: '+ str(int(BPM))+'bpm')
+    ser.flushInput()
+    ser.flushOutput()
+ser.close()
+
 

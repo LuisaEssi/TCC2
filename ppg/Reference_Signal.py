@@ -36,11 +36,22 @@ import fir_filter
 import serial
 import time
 from numpy import trapz
+import signal_hw
 import padasip as pa
+from serial.tools.list_ports import comports
 
+
+import serial
+import time
+
+
+MAX_BUFF_LEN = 15
+SETUP 		 = False
+port 		 = None
 
 ZERO_PHASE_FILTERS = True
 PLOTS = True
+
 # In[]:
 # Plot Settings
 rc("font", **{"size": 11})
@@ -52,45 +63,65 @@ rc("font", **{"size": 11})
 # Load Subject Data using helper function
 from utils import SubjectPPGRecord
 
-MAT_FILE = "Subject14"
-sub = SubjectPPGRecord(MAT_FILE, db_path = "TCC2/ppg/", mat = True)
+MAT_FILE = "Subject1"
+# MAT_FILE = "Subject3"
+# MAT_FILE = "Subject5"
+# MAT_FILE = "Subject6"
+# MAT_FILE = "Subject8"
+# MAT_FILE = "Subject14"
+sub = SubjectPPGRecord(MAT_FILE, db_path = "ppg/", mat = True)
 rec = sub.record
 fs = sub.fs
 red_ppg = rec.red_a
 ir_ppg = rec.ir_a
 spo2 = rec.spo2
-inc_6_sec = 2560 
-# inicio = 355072  # Spo2 = 89
-# inicio = 470*256 # Spo2 = 95/96
-# inicio = 1140*256 # Spo2 = 94
-inicio = 350*256 # Spo2 = 127
-# inicio = 3487*256 # Spo2 = 96
+inc_sec = 2560 
 
 
-rd = red_ppg[inicio:inicio+inc_6_sec]
-ir = ir_ppg[inicio:inicio+inc_6_sec]
+#SUBJECT14
+
+# inicio = 355072  # Spo2 = 89 - ok
+# inicio = 1380*256  # Spo2 = 89 - _______ok
+# inicio = 470*256 # Spo2 = 95/96 -ok
+# inicio = 1140*256 # Spo2 = 94 - cagado
+# inicio = 1660*256 # Spo2 = 87
+# inicio = 3024*256 # Spo2 = 91 - ok
+
+#SUBJECT6
+
+# inicio = 3171*256 # Spo2 = 94 - ok ORDEM = 150 E PASSO = 0,04s
+# inicio = 1543*256 # Spo2 = 94 - ok ORDEM = 150 E PASSO = 0,04s
+# inicio = 1615*256 # Spo2 = 94 - ok _________OK
+
+#SUBJECT8
+
+# inicio = 2315*256 # Spo2 = 96 - _____OK
 
 
+#SUBJECT1
 
+inicio = 1925 *256 #Spo2 = 95%  Tempo = 93 ____OK
 
-# print(spo2[inicio:inicio+inc_6_sec])
+# inicio = 2120 *256 #Spo2 = 95%  Tempo = 93
 
+#SUBJECT3
+# inicio = 1990 *256 #Spo2 = 97%  Tempo = 93
 
-t = np.linspace(0, ((len(rd) / fs)), len(rd))
-rd = rd/np.max(rd)
-ir = ir/np.max(ir)
+#SUBJECT5
+# inicio = 2400*256 #Spo2 = 97%  Tempo = 
 
+# DADOS HARDWARE
+# inicio = 200
+# inc_sec = 2500
+# fs = 250
+# sred, sir, red_ppg, ir_ppg = signal_hw.signal_extract(arquivo = "ppg/txt_hw/weliton.txt",freq = fs)
+# sred, sir, red_ppg, ir_ppg = signal_hw.signal_extract(arquivo = "ppg/txt_hw/manuella.txt",freq = fs)
+# sred, sir, red_ppg, ir_ppg = signal_hw.signal_extract(arquivo = "ppg/txt_hw/teste_18_01_anso.txt",freq = fs)
 
-plt.plot(t,rd, label= 'red norm')
-plt.plot(t, ir, label= 'ir norm')
-plt.legend()
-plt.show()
+red_bac = red_ppg[inicio:inicio+inc_sec]
+ir_bac = ir_ppg[inicio:inicio+inc_sec]
 
-
-# LMS ADAPTATIVE FILTER
-# signal_corrupted = sinal de referencia RS
-# signal = sinal original (IR) sem filtro
-filt = pa.filters.FilterLMS(10,mu=0.1)
+#FUNCAO
 def lms(signal_corrupted, signal, step, order):
     #signal_corrupted: Input Vector.
     #signal: Desired Signal.
@@ -106,8 +137,6 @@ def lms(signal_corrupted, signal, step, order):
     # Matrix that will store the filter coeficients for each loop.
     w = np.zeros((order, I))
 
-    # mse = np.zeros(I,)
-
     for i in range(I):
         # u = Auxiliar variable. Store the piece of the corruptedInput
         # that will be multiplied by the current set of coefficients.
@@ -115,7 +144,6 @@ def lms(signal_corrupted, signal, step, order):
         signal_approx[i] = w[:, [i - 1]].T @ u
 
         error[i] = signal[i + order - 1] - signal_approx[i]
-        # mse[i] = np.absolute(error[i]) ** 2 / I
 
         # Updating the filter coeficients
         w[:, [i]] = w[:, [i - 1]] + step * u * (error[i])
@@ -124,86 +152,217 @@ def lms(signal_corrupted, signal, step, order):
     return signal_approx, error, w
 
 
-r = 0
-f_list = []
-DSP_list = []
-power_list = []
-signal_recev_list = []
+# USB
+while(1):
+    ports = [port for port in comports()]
+    portIndex = 0
+    if len(ports) <= 0:
+        print("Nenhum aparelho conectado, abortando codigo")
+        exit()
+    elif len(ports) == 1:
+        print("Usando porta USB {}".format(ports[portIndex].device))
+    else:
+        print("Portas USB disponiveis:")
+        i=0
+        for port in ports:
+            print("{}- {}".format(i, port.device))
+            i+=1
 
-RS_list = []
-passo = 0.002
-ordem = 200
-
-
-for i in range (r,101,1):
-    r_ir = ((i/100)) * ir 
-    RS = rd - r_ir
-    RS_list.append(RS)
-    step = passo
-    order = ordem
-    
-
-    y = np.empty(len(rd))
-    f = fir_filter.FIR_filter(np.zeros(ordem))
-
-    for j in range(len(rd)):
-        # ref_noise = np.sin(2.0 * np.pi * fnoise/fs* 1)
-        canceller = f.filter(RS[j]) 
-        output_signal = rd[j]-canceller
-        f.lms(output_signal, passo)
-        y[j] = output_signal
+    port = ports[portIndex].device
+    # port = "/dev/ttyUSB0"
+    baudrate = 9600
+    # fileName = "data.txt"
+    fs = int((500/baudrate)*1000)
+    inc_sec = int(fs* 10)
+    samples = inc_sec # 6sec for processing data 
 
 
-    power = sp.sum(y)**2
-    power_list.append(power)
-    # signal_recev_list.append(mse)
-    # plt.plot(t2, signal_recev, label= i)
+    ser = serial.Serial(port,baudrate)
 
-# print(power_list[1], 'valor de power')
-# print(signal_recev_list[1], 'valor mse')
+    print("Connected to ESP port:" + port)
+    ser.flushInput()
+    print("Abrindo Serial")
 
-plt.plot(t, RS_list[89], label = 'RS')
-plt.legend()
-plt.show()
+    line = 0
+    vec = []
+    while line < samples:
+        data = str(ser.readline().decode("utf-8"))
+        vec.append(data)
+        line = line+1
+    print("Final de leituras")
 
-plt.figure()
-plt.plot(y, label = 'filtro')
-plt.plot(rd, label= 'RED')
-plt.legend()
-plt.show()
+    red_ppg = []
+    ir_ppg = []
+
+    inicio = 0
+    vec = vec[1:len(vec)-2]
+    for i in range(len(vec)):
+        red_usb,ir_usb = vec[i].split(",")
+        red_ppg.append(float(red_usb))
+        ir_ppg.append(float(ir_usb))
 
 
-# t2 = np.linspace(0, ((len(rd) / fs)), len(rd)-(ordem-1))
-# plt.plot(t2, signal_recev_list[1], label= 'adaptativo')
-# plt.plot(t, rd, label= 'RED')
+    red_bac = red_ppg[inicio:inicio+inc_sec]
+    ir_bac = ir_ppg[inicio:inicio+inc_sec]
+    print(len(red_bac))
+    t = np.linspace(0, ((samples / fs)), len(red_bac))
 
 
-# plt.legend()
-# plt.show()
-    # (f, S) = scipy.signal.periodogram(signal_recev, fs)
-    # f_list.append(f)
-    # DSP_list = max(S)   
-    
-    # DSP_list.append(S)  
 
-# recev_fft = np.abs(fftshift(fft(signal_recev_list[90]))) 
-# f2 = np.linspace(0, fs/2, num = len(recev_fft))
-# plt.show()
-# for i in range(0,101,1):
-#     recev_fft = np.abs(fftshift(fft(signal_recev_list[i]))) 
-#     f2 = np.linspace(0, fs/2, num = len(recev_fft))
 
-#     plt.plot(f2, recev_fft, label= i)
+    # BANDPASS SIGNAL - Filtro AC
+    cutoff_lac = 0.4
+    cutoff_hac = 8
+    BP_ORDER = 8
 
-#     plt.legend()
-    
-# plt.plot(freqs[idx],DSP_list[89][idx], label = '89')
+    rd = butter_bandpass_filter(red_bac, cutoff_lac, cutoff_hac, fs, order=BP_ORDER)
+    ir = butter_bandpass_filter(ir_bac, cutoff_lac, cutoff_hac, fs, order=BP_ORDER)
 
-# print(signal_recev.shape)
-plt.stem(power_list)
 
-plt.legend()
-plt.show()
-# print(power_list.index(max(power_list)))
-# print(coefs)
+    # print(spo2[inicio:inicio+inc_6_sec])
 
+
+    t = np.linspace(0, ((len(rd) / fs)), len(rd))
+    rd = rd/np.max(rd)
+    ir = ir/np.max(ir)
+
+
+    # plt.plot(t,rd, label= 'red norm')
+    # plt.plot(t, ir, label= 'ir norm')
+    # plt.legend()
+    # plt.show()
+
+
+    #CALCULOS PARA FFT
+
+    #IR
+
+    c_ir_fil = np.abs(fftshift(fft(ir)))
+
+    abs_ir_cfil = c_ir_fil[:int(np.floor(len(c_ir_fil)/2))]
+
+    f2 = np.linspace(0, fs/2, num = len(abs_ir_cfil))
+
+    abs_ir_fil  = abs_ir_cfil /np.max(abs_ir_cfil)
+    abs_ir_fil = np.flipud(abs_ir_fil[0::])
+
+
+    #RED
+
+    c_red_fil = np.abs(fftshift(fft(rd)))
+
+    abs_red_cfil = c_red_fil[:int(np.floor(len(c_red_fil)/2))]
+
+    f4 = np.linspace(0, fs/2, num = len(abs_red_cfil))
+
+    abs_red_fil  = abs_red_cfil /np.max(abs_red_cfil)
+    abs_red_fil = np.flipud(abs_red_fil[0::])
+
+
+    #PLOTS
+
+
+    # plt.subplot(2, 1, 1)
+    # plt.plot(f2,abs_ir_fil,"b", label = "FFT do sinal IR com filtragem")
+    # plt.ylabel("Amplitude [mV]")
+    # plt.xlabel("Frequencia [Hz]")
+    # plt.legend()
+    # plt.subplot(2, 1, 2)
+    # plt.plot(f4,abs_red_fil,"r", label = "FFT do sinal RED com filtragem")
+    # plt.ylabel("Amplitude [mV]")
+    # plt.xlabel("Frequencia [Hz]")
+    # plt.legend()
+    # plt.show()
+
+    # calculo na frequencia
+
+    frequencia = f4[np.where(abs_ir_fil ==np.max(abs_ir_fil))]
+    BPM = frequencia*60
+    print(BPM, "bpm")
+
+
+    # LMS ADAPTATIVE FILTER
+    # signal_corrupted = sinal de referencia RS
+    # signal = sinal original (IR) sem filtro
+    filt = pa.filters.FilterLMS(10,mu=0.1)
+
+    r = 0
+    f_list = []
+    DSP_list = []
+    power_list = []
+    signal_recev_list = []
+
+    RS_list = []
+    # passo = 0.0004
+    passo = 0.004 #HW
+    # passo = 0.001 #BANCO
+    ordem = 150
+
+    for i in range (r,101,1):
+        r_ir = ((i/100)) * ir 
+        RS = r_ir - rd
+        RS_list.append(RS)
+
+        signal_recev, mse ,w = lms(RS,ir, passo, ordem)
+
+        fft_saida = np.abs(fft(signal_recev))    
+        fft_saida = fft_saida[:int(np.floor(len(fft_saida)/2))]
+        fr = np.linspace(0, fs/2, num = len(fft_saida))
+
+        power = np.sum(np.abs(fft_saida)**2)
+        power_list.append(power)
+        signal_recev_list.append(signal_recev)
+        power = 0
+
+    # for i in range(len(RS_list)-1): 
+    #     plt.plot(t, RS_list[i], label = i)
+    # plt.legend()
+    # plt.show()
+
+
+
+    # power_max = [np.max(power_list)] * 50
+
+    # for i in range(len(power_list)):
+    #     power_max.append(power_list[i])
+
+
+    t2 = np.linspace(0, ((len(ir) / fs)), len(ir)-(ordem-1))
+
+    # Filtragem LMS
+
+    # plt.subplot(2, 1, 1)
+    # plt.plot(t, ir,"r", label = "Sinal original IR")
+    # plt.ylabel("Amplitude [mV]")
+    # plt.xlabel("Tempo [segundos]")
+    # plt.legend()
+
+    # plt.subplot(2, 1, 2)
+    # plt.plot(t2,signal_recev_list[9],"b", label = "Sinal filtrado pelo LMS")
+    # plt.ylabel("Amplitude [mV]")
+    # plt.xlabel("Tempo [segundos]")
+    # plt.legend()
+    # plt.show()
+
+    # for i in range(len(signal_recev_list)-1):
+    #     plt.plot(t2, signal_recev_list[i], label= i)
+    # plt.plot(t, ir, label= 'IR')
+
+    # plt.legend()
+    # plt.show()
+    # plt.plot(np.max(power_list)-power_list, label = "Curva de potência")
+    # plt.axvline(power_list.index(min(power_list)), color = 'red', linestyle = '--')
+    # plt.legend()
+    # plt.xlabel("SpO2(%)")
+    # plt.ylabel("Potência")
+    # plt.show()
+    print('O valor de SpO2 (f) é :', power_list.index(min(power_list)), '%')
+
+    def write_ser(cmd):
+        cmd = cmd + '\n'
+        ser.write(cmd.encode())
+
+    write_ser('SpO2: ' + str(int(power_list.index(min(power_list))))+ '%' + ' FC: '+ str(int(BPM))+'bpm')
+    ser.flushInput()
+    ser.flushOutput()
+ser.close()
