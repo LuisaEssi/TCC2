@@ -19,6 +19,8 @@ float optical_red = 0, leitura_luam = 0, optical_ir = 0, sinal_optical_red = 0, 
 float media_optical_red = 0, media_optical_ir = 0, leitura_red = 0, leitura_ir = 0, leitura_ir_comp = 0, leitura_red_comp = 0, leitura_red_i = 0, leitura_ir_i = 0;
 
 double media_movel_red[ordem], media_movel_ir[ordem], saida_fil_ir = 0, saida_fil_red = 0;
+
+///INICIO
  
 void setup() 
 {

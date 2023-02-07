@@ -69,7 +69,7 @@ double media_movel_red[ordem], media_movel_ir[ordem], saida_fil_ir = 0, saida_fi
 char buf[]="Arduino";
 
 
-
+//INICIO
 
 void setup() 
 {
