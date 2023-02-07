@@ -4,6 +4,7 @@ from numpy.fft import fft, fftshift,rfft
 import matplotlib.pyplot as plt
 from matplotlib import rc
 from scipy.signal import find_peaks, butter, lfilter, filtfilt
+import signal_hw
 
 
 #%%
@@ -17,32 +18,34 @@ conteudo = []
 fs = 512    #frequencia de amostragem do sinal
 
 
-file1 = open('novo.txt','r')
-for linha in file1:
-    conteudo.append(linha.rstrip())
-file1.close()
 
-for i in range(len(conteudo)):
-    sr_valor_red, sr_valor_ir, valor_red, valor_ir = conteudo[i].split(",")
-    sr_dados_red.append(sr_valor_red)
-    sr_dados_ir.append(sr_valor_ir)
-    dados_red.append(valor_red)
-    dados_ir.append(valor_ir)
+# file1 = open('novo.txt','r')
+# for linha in file1:
+#     conteudo.append(linha.rstrip())
+# file1.close()
 
-
-
-for i in range(len(conteudo)):
-    sr_dados_red[i] = float(sr_dados_red[i])
-    sr_dados_ir[i] = float(sr_dados_ir[i])
-    dados_red[i] =float(dados_red[i])
-    dados_ir[i] = float(dados_ir[i])
+# for i in range(len(conteudo)):
+#     sr_valor_red, sr_valor_ir, valor_red, valor_ir = conteudo[i].split(",")
+#     sr_dados_red.append(sr_valor_red)
+#     sr_dados_ir.append(sr_valor_ir)
+#     dados_red.append(valor_red)
+#     dados_ir.append(valor_ir)
 
 
-sred = sr_dados_red
-sir = sr_dados_ir
 
-redppg = dados_red
-irppg = dados_ir
+# for i in range(len(conteudo)):
+#     sr_dados_red[i] = float(sr_dados_red[i])
+#     sr_dados_ir[i] = float(sr_dados_ir[i])
+#     dados_red[i] =float(dados_red[i])
+#     dados_ir[i] = float(dados_ir[i])
+
+sred, sir, redppg, irppg = signal_hw.signal_extract(arquivo = "ppg/txt_hw/weliton.txt",freq = fs)
+
+# sred = sr_dados_red
+# sir = sr_dados_ir
+
+# redppg = dados_red
+# irppg = dados_ir
 
 #%%
 
@@ -88,12 +91,13 @@ f = np.linspace(0, fs/2, num = len(abs_ir_or))
 abs_ir_dc  = abs_ir_or /np.max(abs_ir_or)
 abs_ir_dc = np.flipud(abs_ir_dc[0::])
 
-fig, ax = plt.subplots()
-plt.plot(f,abs_ir_dc,"b-", linewidth = 1, label = "FFT IR com remoção")
-plt.ylabel("Amplitude [mV]")
-plt.xlabel("Frequencia [Hz]")
-plt.legend()
-plt.grid()
+
+# fig, ax = plt.subplots()
+# plt.plot(f,abs_ir_dc,"b-", linewidth = 1, label = "FFT IR com remoção")
+# plt.ylabel("Amplitude [mV]")
+# plt.xlabel("Frequencia [Hz]")
+# plt.legend()
+
 
 #%%
 
@@ -106,12 +110,17 @@ f = np.linspace(0, fs/2, num = len(abs_ir_cor))
 abs_ir_cr  = abs_ir_cor /np.max(abs_ir_cor)
 abs_ir_cr = np.flipud(abs_ir_cr[0::])
 
+#AQUI
 fig, ax = plt.subplots()
-plt.plot(f,abs_ir_cr,"b-", linewidth = 1, label = "FFT IR sem remoção")
+plt.plot(f,abs_ir_cr,"b-", linewidth = 1, label = "FFT do sinal IR sem filtragem")
 plt.ylabel("Amplitude [mV]")
 plt.xlabel("Frequencia [Hz]")
 plt.legend()
-plt.grid()
+
+
+
+
+
 
 
 #%%

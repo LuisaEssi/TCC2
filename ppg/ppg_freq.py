@@ -35,8 +35,12 @@ rc("font", **{"size": 11})
 # Load Subject Data using helper function
 from utils import SubjectPPGRecord
 
-MAT_FILE = "Subject14"
-sub = SubjectPPGRecord(MAT_FILE, db_path="TCC2/ppg/", mat=True)
+# MAT_FILE = "Subject1"
+MAT_FILE = "Subject5"
+# MAT_FILE = "Subject6"
+# MAT_FILE = "Subject8"
+# MAT_FILE = "Subject14"
+sub = SubjectPPGRecord(MAT_FILE, db_path="ppg/", mat=True)
 rec = sub.record
 fs = sub.fs
 red_ppg = rec.red_a
@@ -52,19 +56,20 @@ t = np.linspace(0, ((len(red_ppg) / fs)), len(red_ppg))
 red_ppg_n = red_ppg/max(red_ppg)
 
 if PLOTS:
-    plt.plot(t,spo2,"b-", linewidth = 1, label = "FFT IR filtrado (AC)")
-    plt.legend()
-    plt.figure()
-    
-if PLOTS:
-    plt.plot(t,ir_ppg,"b-", linewidth = 1, label = "IR")
-    plt.legend()
+    plt.plot(t,spo2,"b-", linewidth = 1, label = "SPO2")
+    plt.legend()  
     plt.show()
+
+    
+# if PLOTS:
+#     plt.plot(t,ir_ppg,"b-", linewidth = 1, label = "IR")
+#     plt.legend()
+ 
     
 
 
 
-# print(spo2[355072:355072+2560])
+# print(spo2[355072:355072+inc_10_sec])
 # # red = red_ppg[200000:]
 # # ir = ir_ppg[200000:]
 # # print(len(spo2))
