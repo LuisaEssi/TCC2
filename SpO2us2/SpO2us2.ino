@@ -3,9 +3,7 @@
 #include <Adafruit_GFX.h>
 #include <SPI.h>
 #include <Wire.h>
-//#include <SD.h>
 #include <SPIFFS.h>
-//#include <String.h>
 #define SCREEN_WIDTH 128 // OLED display width, in pixels
 #define SCREEN_HEIGHT 64 // OLED display height, in pixels
 
@@ -23,6 +21,11 @@
 #define OLED_CS     5
 #define OLED_RESET  17
 
+int leituraAtual = 1;
+#define posicao_x 5
+#define posicao_y 40
+#define altura 20
+#define comprimento 110
 
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT,
   OLED_MOSI, OLED_CLK, OLED_DC, OLED_RESET, OLED_CS);
@@ -31,6 +34,7 @@ Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT,
 
 #define LOGO_HEIGHT   16
 #define LOGO_WIDTH    16
+
 static const unsigned char PROGMEM logo_bmp[] =
 { 0b00000000, 0b11000000,
   0b00000001, 0b11000000,
@@ -57,12 +61,15 @@ uint8_t idx = 0;
 int counter_linha = 0;
 unsigned char controle_LEDs = 0;/* Responsavel pela comutacao do acionamento dos LEDs*/
 
-int m = 5, cont = 0, compensa = 0, indice = 0, i =0;
+int m = 5, cont = 0, compensa = 0, indice = 0, i =0, saida_fil_ir_A = 0, saida_fil_red_A = 0;
 float optical_red = 0, leitura_luam = 0, optical_ir = 0, sinal_optical_red = 0, sinal_optical_ir = 0;
 float media_optical_red = 0, media_optical_ir = 0, leitura_red = 0, leitura_ir = 0, leitura_ir_comp = 0, leitura_red_comp = 0, leitura_red_i = 0, leitura_ir_i = 0;
 
 double media_movel_red[ordem], media_movel_ir[ordem], saida_fil_ir = 0, saida_fil_red = 0;
 char buf[]="Arduino";
+
+
+
 
 void setup() 
 {
@@ -70,8 +77,8 @@ void setup()
   Serial.begin(9600);
 
 
- 
-    display.begin(SSD1306_SWITCHCAPVCC, 0x3C);  
+     
+  display.begin(SSD1306_SWITCHCAPVCC, 0x3C);  
 
   // Clear the buffer.
   display.clearDisplay();
@@ -91,7 +98,14 @@ void setup()
   display.display();
   delay(2000);
   display.clearDisplay();
-  
+
+//
+//  //drawFastVLine(x,y,width,color) --> linha vertical
+//  display.drawFastVLine(posicao_x,posicao_y, altura,WHITE); //eixo Y
+//  //drawFastHLine(x,y,width,color) --> linha horizontal
+//  display.drawFastHLine(posicao_x,altura+1,comprimento,WHITE); //eixo X
+
+
   pinMode(LED_IR, OUTPUT);
   pinMode(LED_RED, OUTPUT);
   pinMode(FOTODIODO, INPUT);
@@ -106,6 +120,7 @@ for (int i = 0; i < ordem; i++) {
   
   }  
 }
+
  
 void loop() 
 {       
@@ -192,13 +207,16 @@ media_optical_ir = 0;
              delayMicroseconds(1240);  
              
 //       ----------- Converter para valor de tensao ----------
-
+             saida_fil_red_A = saida_fil_red;
+             saida_fil_ir_A = saida_fil_ir;
              
              saida_fil_red = 3.3 - ((saida_fil_red*3.3)/4095);
              saida_fil_ir = 3.3 - ((saida_fil_ir*3.3)/4095);
 
              leitura_red_i =  3.3 - ((leitura_red_i*3.3)/4095);
              leitura_ir_i= 3.3 - ((leitura_ir_i*3.3)/4095);
+
+//           imprimir = saida_fil_red 
 
              
 //        ----------- Printar dados --------
@@ -221,6 +239,10 @@ if(Serial.available() > 0){ // There's a command
     
     if(c != '\n'){ // Still reading
       str[idx++] = c; // Parse the string byte (char) by byte
+            
+//      int sinal_ppg = map(saida_fil_red_A, 0, 4094, 0, 20);
+//      display.drawPixel(posicao_x+leituraAtual, altura-sinal_ppg, WHITE);
+//      display.display();
     }
     else{ // Done reading
       
@@ -231,46 +253,36 @@ if(Serial.available() > 0){ // There's a command
       display.clearDisplay();
       display.println(str);
       display.display();
-
-//      str[idx] = '\0'; // Convert it to a string
-//      display.setTextColor(WHITE);
-//      display.setCursor(0,34);
-//      display.setTextSize(2);
-//      display.println(str);
-//      display.display();
-////      delay(500);
-//      display.clearDisplay();
-  
-
-      // Reset reading index 
       idx = 0;
     }
    
   }else{
 
-      
-      
-//      str[idx] = '\0'; // Convert it to a string
-//      display.setTextColor(WHITE);
-//      display.setCursor(0,4);
-//      display.println("Aguarde ...");
-//      display.setTextSize(2);
-//      display.display();
-////      delay(2000);
-//     
-
       str[idx] = '\0'; // Convert it to a string
       display.setTextColor(WHITE);
       display.setCursor(0,34);
       display.setTextSize(2);
-      
-      
+////      
+//      int sinal_ppg = map(saida_fil_red, 0, 4094, 0, 20);
+//      display.drawPixel(posicao_x+leituraAtual, altura-sinal_ppg, WHITE);
       display.display();
-//      delay(500);
-//      display.clearDisplay();
-  }
-  
 
+}
+//leituraAtual ++;
+//
+//if(leituraAtual == 90)
+//  {
+//    //limpa a área toda do gráfico
+//    display.fillRect(posicao_x+1, posicao_y-1, comprimento, altura-1, BLACK);
+//    leituraAtual = 1; //volta o contador de leitura para 1 (nova coordenada X)   
+//
+//    //como limpamos a área do gráfico, temos que redesenhar os pontos da "seta"
+//    display.drawPixel(6,2,WHITE);
+//    display.drawPixel(posicao_x+comprimento-2,posicao_y+altura-1,WHITE);
+//  }
+
+    //intervalo de tempo para realizarmos nova leitura de dados
+   
 //             Serial.print(saida_fil_red,6);
 //             Serial.print(",");
 //             Serial.print(saida_fil_ir,6);

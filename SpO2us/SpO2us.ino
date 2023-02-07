@@ -129,14 +129,20 @@ media_optical_ir = 0;
 //       ----------- Converter para valor de tensao ----------
 
              
-             saida_fil_red = (saida_fil_red*3.3)/4095;
-             saida_fil_ir = (saida_fil_ir*3.3)/4095;
+//             saida_fil_red = (saida_fil_red*3.3)/4095;
+//             saida_fil_ir = (saida_fil_ir*3.3)/4095;
+////
+////             optical_red = (optical_red*3.3)/4095;
+////             optical_ir = (optical_ir*3.3)/4095;
 //
-//             optical_red = (optical_red*3.3)/4095;
-//             optical_ir = (optical_ir*3.3)/4095;
+//             leitura_red_i = (leitura_red_i*3.3)/4095;
+//             leitura_ir_i= (leitura_ir_i*3.3)/4095;
 
-             leitura_red_i = (leitura_red_i*3.3)/4095;
-             leitura_ir_i= (leitura_ir_i*3.3)/4095;
+             saida_fil_red = 3.3 - ((saida_fil_red*3.3)/4095);
+             saida_fil_ir = 3.3 - ((saida_fil_ir*3.3)/4095);
+
+             leitura_red_i =  3.3 - ((leitura_red_i*3.3)/4095);
+             leitura_ir_i= 3.3 - ((leitura_ir_i*3.3)/4095);
 
              
 //        ----------- Printar dados --------
@@ -147,7 +153,7 @@ media_optical_ir = 0;
              Serial.print(",");
              Serial.print(leitura_red_i,6);
              Serial.print(",");
-             Serial.print(leitura_ir_i,6);
+             Serial.println(leitura_ir_i,6);
 //             Serial.print(",");
 //             Serial.println(leitura_luam,6);
          
