@@ -4,8 +4,11 @@
 #include <SPI.h>
 #include <Wire.h>
 #include <SPIFFS.h>
+#include <esp_task_wdt.h>
 #define SCREEN_WIDTH 128 // OLED display width, in pixels
 #define SCREEN_HEIGHT 64 // OLED display height, in pixels
+
+#define BLACK           0x0000
 
 #define LED_IR 32
 
@@ -66,30 +69,177 @@ float optical_red = 0, leitura_luam = 0, optical_ir = 0, sinal_optical_red = 0, 
 float media_optical_red = 0, media_optical_ir = 0, leitura_red = 0, leitura_ir = 0, leitura_ir_comp = 0, leitura_red_comp = 0, leitura_red_i = 0, leitura_ir_i = 0;
 
 double media_movel_red[ordem], media_movel_ir[ordem], saida_fil_ir = 0, saida_fil_red = 0;
+
 char buf[]="Arduino";
 
+//variaveis que indicam o núcleo
+static uint8_t taskCoreZero = 0;
+static uint8_t taskCoreOne  = 1;
 
-//INICIO
+//FUNCOES
 
-void setup() 
-{
-  
-  Serial.begin(9600);
+void comutaLEDs( void * pvParameters ) {
+   
+  while(true){
+    esp_task_wdt_init(30, false); 
+    media_optical_red = 0;
+    media_optical_ir = 0;
+    
+    //     -------------- Liga Vermelho -----------------
+    
+    digitalWrite(LED_RED,LOW);
+    digitalWrite(LED_IR,HIGH);            
+    
+    delayMicroseconds(105); 
+               
+    media_optical_red = 0;
+    leitura_red = 0;
+    leitura_red_i = 0;
+    optical_red = 0;
+//    leitura_red_i= analogRead(FOTODIODO);
+    for(i=0; i<m; i++){
+      leitura_red += analogRead(FOTODIODO);         //Conversao AD sinal vermelho
+    }  
+             
+    media_optical_red = leitura_red/m;    
+//    sinal_optical_red += (media_optical_red); 
+//    sinal_optical_red -= media_movel_red[0];    
+//    media_movel_red[indice] = (media_optical_red);    
+//    saida_fil_red = sinal_optical_red/ordem;
+    
+    delayMicroseconds(115);
+     
+    //      --------------- Desliga ----------------
+    
+    digitalWrite(LED_RED,HIGH);
+    digitalWrite(LED_IR,HIGH);    
+    delayMicroseconds(160);
+    leitura_luam = 0;
+    leitura_luam = analogRead (FOTODIODO);    //Conversao AD iluminacao ambiente
+    delayMicroseconds(160);
+     
+    
+    //     ------------ Liga Infravermelho -------------
+    
+    
+    digitalWrite(LED_RED,HIGH);
+    digitalWrite(LED_IR, LOW);    
+    delayMicroseconds(105);
+     
+    media_optical_ir = 0; 
+    leitura_ir = 0;
+    leitura_ir_i = 0;
+    optical_ir = 0;
+//    leitura_ir_i= analogRead(FOTODIODO);      
+    for(i=0; i<m; i++){
+      leitura_ir += analogRead(FOTODIODO);        //Conversao AD sinal infravermelho    
+    }    
+      
+    media_optical_ir = leitura_ir/m;  
+//    sinal_optical_ir += media_optical_ir; 
+//    sinal_optical_ir -= media_movel_ir[0];
+//    media_movel_ir[indice] = media_optical_ir;                       
+//    saida_fil_ir = sinal_optical_ir/ordem;
+//    
+    delayMicroseconds(115);
+//
+//    Serial.println(saida_fil_ir);
+//     
+    
+    //      --------------- Desliga ----------------
+    
+    digitalWrite(LED_RED,HIGH);
+    digitalWrite(LED_IR,HIGH);
+    delayMicroseconds(1240);  
 
+    indice ++;
+    indice %= ordem;
+    
+    //       ----------- Converter para valor de tensao ----------
+    saida_fil_red_A = media_optical_red;
+    saida_fil_ir_A = media_optical_ir;
+    
+    saida_fil_red = 3.3 - ((media_optical_red*3.3)/4095);
+    saida_fil_ir = 3.3 - ((media_optical_ir*3.3)/4095);
+    
+//    leitura_red =  3.3 - ((leitura_red_i*3.3)/4095);
+//    leitura_ir= 3.3 - ((leitura_ir_i*3.3)/4095);
+
+    
+    
+    //        ----------- Printar dados filtrados --------
+    
+    Serial.print(saida_fil_red_A);
+    Serial.print(",");
+    Serial.println(saida_fil_ir_A);
 
      
+    
+    }
+}
+
+
+void LigaOLED( void * pvParameters ){
+   
+  while(true){
+    esp_task_wdt_init(30, false); 
+//    if(Serial.available() > 0){ // There's a command    
+//      c = Serial.read(); // Read one byte
+//       
+//    
+//      if(c != '\n'){ // Still reading
+//        str[idx++] = c; // Parse the string byte (char) by byte
+//        
+//      }
+//      else{ // Done reading      
+//        str[idx] = '\0'; // Convert it to a string
+//        display.setTextColor(WHITE);
+//        display.setCursor(0,4);
+//        display.setTextSize(2);
+//        display.clearDisplay();
+//        display.println(str);
+//        display.display();
+//        idx = 0;
+//      }
+//     
+//    }else{
+//      str[idx] = '\0'; // Convert it to a string
+//      display.setTextColor(WHITE);
+//      display.setCursor(0,34);
+//      display.setTextSize(2);
+//      display.display();  
+//    }   
+
+    int grafico_red = map(saida_fil_red_A, 750, 850, 0, 20);
+
+    display.drawPixel(posicao_x+leituraAtual, altura-grafico_red, WHITE);
+    display.setTextSize(2);
+    display.display();  
+    
+    leituraAtual++;
+
+    if(leituraAtual == 110) {
+      //limpa a área toda do gráfico
+      display.fillRect(posicao_x+1,posicao_y-1, comprimento, altura-1, BLACK);
+      leituraAtual = 1; //volta o contador de leitura para 1 (nova coordenada X)   
+      display.clearDisplay();
+   }
+   
+//   delay(100);
+  }  
+}
+
+
+
+void setup() {
+  
+  Serial.begin(115200);
+   
   display.begin(SSD1306_SWITCHCAPVCC, 0x3C);  
+  display.fillScreen(BLACK);
 
   // Clear the buffer.
-  display.clearDisplay();
-
-
-//  for (int i = 0; i<30 ; i++)
-//  {
-//    string_red[i] = ' ';
-//    string_ir[i]= ' ';
-//  }
-  
+  display.clearDisplay();  
   // Display Text
   display.setTextSize(1);
   display.setTextColor(WHITE);
@@ -97,200 +247,44 @@ void setup()
   display.println("Começa aqui!");
   display.display();
   delay(2000);
-  display.clearDisplay();
-
-//
-//  //drawFastVLine(x,y,width,color) --> linha vertical
-//  display.drawFastVLine(posicao_x,posicao_y, altura,WHITE); //eixo Y
-//  //drawFastHLine(x,y,width,color) --> linha horizontal
-//  display.drawFastHLine(posicao_x,altura+1,comprimento,WHITE); //eixo X
-
-
+  
+  display.clearDisplay();   
   pinMode(LED_IR, OUTPUT);
   pinMode(LED_RED, OUTPUT);
-  pinMode(FOTODIODO, INPUT);
-  
+  pinMode(FOTODIODO, INPUT);  
   
   digitalWrite(LED_RED,HIGH);
   digitalWrite(LED_IR,HIGH); 
   
-for (int i = 0; i < ordem; i++) { 
-  media_movel_red[i] = 0; 
-  media_movel_ir[i]=0; 
-  
+  for (int i = 0; i < ordem; i++) { 
+    media_movel_red[i] = 0; 
+    media_movel_ir[i]=0;     
   }  
+
+  xTaskCreatePinnedToCore(
+                  comutaLEDs,   /* função que implementa a tarefa */
+                  "comutaLEDs", /* nome da tarefa */
+                  10000,      /* número de palavras a serem alocadas para uso com a pilha da tarefa */
+                  NULL,       /* parâmetro de entrada para a tarefa (pode ser NULL) */
+                  3,          /* prioridade da tarefa (0 a N) */
+                  NULL,       /* referência para a tarefa (pode ser NULL) */
+                  taskCoreZero);         /* Núcleo que executará a tarefa */
+                  
+  delay(10); //tempo para a tarefa iniciar
+
+  xTaskCreatePinnedToCore(
+                  LigaOLED,   /* função que implementa a tarefa */
+                  "LigaOLED", /* nome da tarefa */
+                  10000,      /* número de palavras a serem alocadas para uso com a pilha da tarefa */
+                  NULL,       /* parâmetro de entrada para a tarefa (pode ser NULL) */
+                  1,          /* prioridade da tarefa (0 a N) */
+                  NULL,       /* referência para a tarefa (pode ser NULL) */
+                  taskCoreOne);         /* Núcleo que executará a tarefa */
+                  
+  delay(50); //tempo para a tarefa iniciar
+//  
 }
 
- 
-void loop() 
-{       
-media_optical_red = 0;
-media_optical_ir = 0;
-//cont = cont + 1;
 
-//     -------------- Liga Vermelho -----------------
-
-     
-             digitalWrite(LED_RED,LOW);
-             digitalWrite(LED_IR,HIGH);            
-
-             delayMicroseconds(105);
-//             delay(1000);             
-             media_optical_red = 0;
-             leitura_red = 0;
-             leitura_red_i = 0;
-             optical_red = 0;
-             leitura_red_i= analogRead(FOTODIODO);
-             for(i=0; i<m; i++){
-                 leitura_red += analogRead(FOTODIODO);         //Conversao AD sinal vermelho
-                 
-                  }  
-                         
-             media_optical_red = leitura_red/m;
-             
-             sinal_optical_red += (media_optical_red); 
-             sinal_optical_red -= media_movel_red[indice];
-             
-             media_movel_red[indice] = (media_optical_red);
-             
-             saida_fil_red = (sinal_optical_red)/ordem;
-           
-             delayMicroseconds(115);
-//             delay(1000);
-
-//      --------------- Desliga ----------------
-
-             digitalWrite(LED_RED,HIGH);
-             digitalWrite(LED_IR,HIGH);
-             
-             delayMicroseconds(160);
-//             delay(1000);
-             leitura_luam = 0;
-             leitura_luam = analogRead (FOTODIODO);    //Conversao AD iluminacao ambiente
-             delayMicroseconds(160);
-//             delay(1000);
-                
-//     ------------ Liga Infravermelho -------------
-
-   
-             digitalWrite(LED_RED,HIGH);
-             digitalWrite(LED_IR, LOW);
-  
-             delayMicroseconds(105);
-//             delay(1000);
-             media_optical_ir = 0; 
-             leitura_ir = 0;
-             leitura_ir_i = 0;
-             optical_ir = 0;
-             leitura_ir_i= analogRead(FOTODIODO);      
-             for(i=0; i<m; i++){
-               leitura_ir += analogRead(FOTODIODO);         //Conversao AD sinal infravermelho
-               
-                }      
-             media_optical_ir = leitura_ir/m;
-
-             sinal_optical_ir += media_optical_ir; 
-             sinal_optical_ir -= media_movel_ir[indice];
-             media_movel_ir[indice] = media_optical_ir;
-                                       
-             saida_fil_ir = (sinal_optical_ir)/ordem;
-             
-             delayMicroseconds(115);
-//             delay(1000);
-            
-//      --------------- Desliga ----------------
-              
-
-             digitalWrite(LED_RED,HIGH);
-             digitalWrite(LED_IR,HIGH);
-//             delay(1000);
-             delayMicroseconds(1240);  
-             
-//       ----------- Converter para valor de tensao ----------
-             saida_fil_red_A = saida_fil_red;
-             saida_fil_ir_A = saida_fil_ir;
-             
-             saida_fil_red = 3.3 - ((saida_fil_red*3.3)/4095);
-             saida_fil_ir = 3.3 - ((saida_fil_ir*3.3)/4095);
-
-             leitura_red_i =  3.3 - ((leitura_red_i*3.3)/4095);
-             leitura_ir_i= 3.3 - ((leitura_ir_i*3.3)/4095);
-
-//           imprimir = saida_fil_red 
-
-             
-//        ----------- Printar dados --------
-//              dtostrf(saida_fil_red, 7, 7, string_red);
-//              dtostrf(saida_fil_ir, 7, 7, string_ir);
-
-              Serial.print(saida_fil_red,6);
-              Serial.print(",");
-              Serial.println(saida_fil_ir,6);
-//              strcat(string_red,",");
-//              strcat(string_red,string_ir);
-////              buf = string_red;
-              
-//            
-//              Serial.println(string_red);
-
-if(Serial.available() > 0){ // There's a command
-    
-    c = Serial.read(); // Read one byte
-    
-    if(c != '\n'){ // Still reading
-      str[idx++] = c; // Parse the string byte (char) by byte
-            
-//      int sinal_ppg = map(saida_fil_red_A, 0, 4094, 0, 20);
-//      display.drawPixel(posicao_x+leituraAtual, altura-sinal_ppg, WHITE);
-//      display.display();
-    }
-    else{ // Done reading
-      
-      str[idx] = '\0'; // Convert it to a string
-      display.setTextColor(WHITE);
-      display.setCursor(0,4);
-      display.setTextSize(2);
-      display.clearDisplay();
-      display.println(str);
-      display.display();
-      idx = 0;
-    }
-   
-  }else{
-
-      str[idx] = '\0'; // Convert it to a string
-      display.setTextColor(WHITE);
-      display.setCursor(0,34);
-      display.setTextSize(2);
-////      
-//      int sinal_ppg = map(saida_fil_red, 0, 4094, 0, 20);
-//      display.drawPixel(posicao_x+leituraAtual, altura-sinal_ppg, WHITE);
-      display.display();
-
-}
-//leituraAtual ++;
-//
-//if(leituraAtual == 90)
-//  {
-//    //limpa a área toda do gráfico
-//    display.fillRect(posicao_x+1, posicao_y-1, comprimento, altura-1, BLACK);
-//    leituraAtual = 1; //volta o contador de leitura para 1 (nova coordenada X)   
-//
-//    //como limpamos a área do gráfico, temos que redesenhar os pontos da "seta"
-//    display.drawPixel(6,2,WHITE);
-//    display.drawPixel(posicao_x+comprimento-2,posicao_y+altura-1,WHITE);
-//  }
-
-    //intervalo de tempo para realizarmos nova leitura de dados
-   
-//             Serial.print(saida_fil_red,6);
-//             Serial.print(",");
-//             Serial.print(saida_fil_ir,6);
-//             Serial.print(",");
-//             Serial.print(leitura_red_i,6);
-//             Serial.print(",");
-//             Serial.println(leitura_ir_i,6);
-//             Serial.print(",");
-//             Serial.println(leitura_luam,6);
- 
-}
+void loop(){
+  }
